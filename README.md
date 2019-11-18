@@ -8,3 +8,6 @@ https://github.com/joyent/sdc-hagfish-watcher runs on each of the CN's, and outp
 - Automate the reading, summary, and output of the usage files
 - Write a microservice to serve the data for `sdc-portal` to show billing details in the portal.
 - Integrate into the Chargebee invoicing process
+
+# hagfish watcher 
+Details on hagfish can be founder here: https://eng.joyent.com/usage/
