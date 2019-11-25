@@ -58,8 +58,10 @@ func main() {
         if usageType == "usage" {
             vmUUID := watcherData.UUID
             ownerUUID := watcherData.Config.Attributes.OwnerUUID
+            billingID := watcherData.Config.Attributes.BillingID
+            timestamp := watcherData.Timestamp
 
-            fmt.Println(ownerUUID, vmUUID))
+            fmt.Println(ownerUUID, vmUUID, billingID, timestamp)
         }
      }
     if s.Err() != nil {
