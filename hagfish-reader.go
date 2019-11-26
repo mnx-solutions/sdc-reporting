@@ -56,12 +56,17 @@ func main() {
         }
         usageType := watcherData.Type
         if usageType == "usage" {
-            vmUUID := watcherData.UUID
             ownerUUID := watcherData.Config.Attributes.OwnerUUID
             billingID := watcherData.Config.Attributes.BillingID
+            vmUUID := watcherData.UUID
+            alias := watcherData.Config.Attributes.Alias
             timestamp := watcherData.Timestamp
+            net0SentBytes := watcherData.NetworkUsage.Net0.SentBytes
+            net0ReceivedBytes := watcherData.NetworkUsage.Net0.ReceivedBytes
+            // net1SentBytes := watcherData.NetworkUsage.Net1.SentBytes
+            // net1ReceivedBytes := watcherData.NetworkUsage.Net1.ReceivedBytes
 
-            fmt.Println(ownerUUID, vmUUID, billingID, timestamp)
+            fmt.Println(ownerUUID, vmUUID, billingID, alias, net0SentBytes, net0ReceivedBytes,  timestamp)
         }
      }
     if s.Err() != nil {
