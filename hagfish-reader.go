@@ -1,13 +1,32 @@
 package main
+
 import (
-    "fmt"
-    "os"
-    "log"
-    "bufio"
-    "encoding/json"
-    "time"
-//    "io/ioutil"
+	"bufio"
+	"encoding/json"
+	"fmt"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/jinzhu/gorm"
+	"log"
+	"os"
+	"time"
 )
+
+type BillingPlan struct {
+	ID        uint `gorm:"primary_key"`
+	BillingID string
+	Price     int32
+	Name      string
+}
+
+type RawWatcherData struct {
+	ID        uint `gorm:"primary_key"`
+	OwnerUUID string
+	UUID      string
+	BillingID string
+	Alias     string
+	Price     float64
+	Timestamp time.Time
+}
 
 type WatcherData struct {
 	ServerUUID     string    `json:"server_uuid"`
@@ -39,38 +58,97 @@ type WatcherData struct {
 	} `json:"network_usage"`
 }
 
-func main() {
+// dbName := os.Getenv("DB_NAME")
+// dbPass := os.Getenv("DB_PASS")
+// dbHost := os.Getenv("DB_HOST")
+// dbPort := os.Getenv("DB_PORT")
 
-    filename := os.Args[1]
-    var watcherData WatcherData
-
-    jsonFile, err := os.Open(filename)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer jsonFile.Close()
-    s := bufio.NewScanner(jsonFile)
-    for s.Scan() {
-        if err := json.Unmarshal(s.Bytes(), &watcherData); err != nil {
-           fmt.Println(err)
-        }
-        usageType := watcherData.Type
-        if usageType == "usage" {
-            ownerUUID := watcherData.Config.Attributes.OwnerUUID
-            billingID := watcherData.Config.Attributes.BillingID
-            vmUUID := watcherData.UUID
-            alias := watcherData.Config.Attributes.Alias
-            timestamp := watcherData.Timestamp
-            net0SentBytes := watcherData.NetworkUsage.Net0.SentBytes
-            net0ReceivedBytes := watcherData.NetworkUsage.Net0.ReceivedBytes
-            // net1SentBytes := watcherData.NetworkUsage.Net1.SentBytes
-            // net1ReceivedBytes := watcherData.NetworkUsage.Net1.ReceivedBytes
-
-            fmt.Println(ownerUUID, vmUUID, billingID, alias, net0SentBytes, net0ReceivedBytes,  timestamp)
-        }
-     }
-    if s.Err() != nil {
-        fmt.Println("e")
-    }
+func panicOnError(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
+func main() {
+	db, err := gorm.Open("mysql", "username:password@tcp(address:3306)/database_name?charset=utf8")
+
+	panicOnError(err)
+	defer db.Close()
+
+	db.AutoMigrate(&RawWatcherData{})
+
+	billingData := make(map[string]float64)
+
+	rows, err := db.Model(&BillingPlan{}).Select("billing_id, price").Rows() // (*sql.Rows, error)
+	defer rows.Close()
+
+	for rows.Next() {
+		var billingPlan BillingPlan
+		db.ScanRows(rows, &billingPlan)
+		billingData[billingPlan.BillingID] = float64(billingPlan.Price)
+	}
+
+	fmt.Println(billingData)
+
+	filename := os.Args[1]
+	var watcherData WatcherData
+
+	jsonFile, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer jsonFile.Close()
+	s := bufio.NewScanner(jsonFile)
+
+	mapWatcherData := make(map[string]RawWatcherData)
+	for s.Scan() {
+		if err := json.Unmarshal(s.Bytes(), &watcherData); err != nil {
+			fmt.Println(err)
+		}
+		usageType := watcherData.Type
+		if usageType == "usage" {
+			ownerUUID := watcherData.Config.Attributes.OwnerUUID
+			billingID := watcherData.Config.Attributes.BillingID
+			vmUUID := watcherData.UUID
+			// alias := watcherData.Config.Attributes.Alias
+			timestamp := watcherData.Timestamp
+			// net0SentBytes := watcherData.NetworkUsage.Net0.SentBytes
+			// net0ReceivedBytes := watcherData.NetworkUsage.Net0.ReceivedBytes
+			// net1SentBytes := watcherData.NetworkUsage.Net1.SentBytes
+			// net1ReceivedBytes := watcherData.NetworkUsage.Net1.ReceivedBytes
+
+			// fmt.Println(ownerUUID, vmUUID, billingID, alias, timestamp)
+			if val, err := billingData[billingID]; err {
+				perMinute := val / 720 / 60
+				fmt.Println(perMinute)
+				if _, err := mapWatcherData[vmUUID]; err {
+					_tmpRawWatcherData := mapWatcherData[vmUUID]
+					_newPrice := float64(_tmpRawWatcherData.Price) + perMinute
+					mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Price: _newPrice, Timestamp: timestamp}
+				} else {
+					mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Price: perMinute, Timestamp: timestamp}
+				}
+			}
+
+		}
+
+	}
+	if s.Err() != nil {
+		fmt.Println("e")
+	}
+
+	for _, v := range mapWatcherData {
+		rawWatcherData := RawWatcherData{}
+		res := db.Where("owner_uuid = ? and uuid = ? and billing_id = ? and timestamp = ?", v.OwnerUUID, v.UUID, v.BillingID, v.Timestamp).First(&rawWatcherData)
+		if res.RecordNotFound() {
+			newRawWatcherData := RawWatcherData{OwnerUUID: v.OwnerUUID, UUID: v.UUID, BillingID: v.BillingID, Price: v.Price, Timestamp: v.Timestamp}
+			fmt.Println("Creating", newRawWatcherData)
+			db.Create(&newRawWatcherData)
+		} else if db.Error != nil {
+			panic("error:" + res.Error.Error())
+		} else {
+			fmt.Println("RawWatcherData exists!")
+		}
+	}
+
+}
