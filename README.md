@@ -10,4 +10,15 @@ https://github.com/joyent/sdc-hagfish-watcher runs on each of the CN's, and outp
 - Integrate into the Chargebee invoicing process
 
 # hagfish watcher 
-Details on hagfish can be founder here: https://eng.joyent.com/usage/
+Details on hagfish can be founder here: https://eng.joyent.com/usage/.
+
+# update-billing
+Currently reads billing information from chargebee and inserts into the billing table.  Pricing is based on monthly prices.
+
+# hagfish-reader
+The hagfish-reader reads the usage logs in /var/log/usage/ and insert parts of the records into a database to be used with hagfish-reporter
+
+Currently we import owner_uuid, billing_id, vm_uuid.  From this data we read a billing table to calculate per minute pricing
+
+# hagfish-reporter
+hagfish-reporter is used to calculate costs, and network bandwidth usage.
