@@ -7,6 +7,7 @@ import (
 	"github.com/chargebee/chargebee-go/models/plan"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
+        "os"
 )
 
 func panicOnError(err error) {
@@ -23,13 +24,27 @@ type BillingPlan struct {
 	Name      string
 }
 
+var dbName = os.Getenv("DB_NAME")
+var dbUser = os.Getenv("DB_USER")
+var dbPass = os.Getenv("DB_PASS")
+var dbHost = os.Getenv("DB_HOST")
+var dbPort = os.Getenv("DB_PORT")
+var dbDriver = os.Getenv("DB_DRIVER")
+
+var chargebeeKey = os.Getenv("CHARGEBEE_KEY")
+var chargebeeSite = os.Getenv("CHARGEBEE_SITE")
+
+var DBURL = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True", dbUser, dbPass, dbHost, dbPort, dbName)
+
+var db, err = gorm.Open("mysql", DBURL)
+
+
 func main() {
 
 	fmt.Println("Configuring chargebee.. ")
-	chargebee.Configure("key", "site")
+	// chargebee.Configure("key", "site")
+        chargebee.Configure(chargebeeKey, chargebeeSite)
 
-	fmt.Println("Connecting to mysql.. ")
-	db, err := gorm.Open("mysql", ":")
 	// db.LogMode(true)
 
 	defer db.Close()

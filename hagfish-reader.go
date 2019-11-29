@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
@@ -26,6 +27,7 @@ type RawWatcherData struct {
 	Alias     string
 	Price     float64
 	Timestamp time.Time
+	Processed bool
 }
 
 type WatcherData struct {
@@ -58,10 +60,16 @@ type WatcherData struct {
 	} `json:"network_usage"`
 }
 
-// dbName := os.Getenv("DB_NAME")
-// dbPass := os.Getenv("DB_PASS")
-// dbHost := os.Getenv("DB_HOST")
-// dbPort := os.Getenv("DB_PORT")
+var dbName = os.Getenv("DB_NAME")
+var dbUser = os.Getenv("DB_USER")
+var dbPass = os.Getenv("DB_PASS")
+var dbHost = os.Getenv("DB_HOST")
+var dbPort = os.Getenv("DB_PORT")
+var dbDriver = os.Getenv("DB_DRIVER")
+var DBURL = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True", dbUser, dbPass, dbHost, dbPort, dbName)
+
+var db, err = gorm.Open("mysql", DBURL)
+
 
 func panicOnError(err error) {
 	if err != nil {
@@ -70,7 +78,8 @@ func panicOnError(err error) {
 }
 
 func main() {
-	db, err := gorm.Open("mysql", "username:password@tcp(address:3306)/database_name?charset=utf8")
+
+	// db.LogMode(true)
 
 	panicOnError(err)
 	defer db.Close()
@@ -88,22 +97,30 @@ func main() {
 		billingData[billingPlan.BillingID] = float64(billingPlan.Price)
 	}
 
-	fmt.Println(billingData)
+	// fmt.Println(billingData)
 
 	filename := os.Args[1]
 	var watcherData WatcherData
 
-	jsonFile, err := os.Open(filename)
+	gzLogFile, err := os.Open(filename)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer jsonFile.Close()
-	s := bufio.NewScanner(jsonFile)
+
+	gz, err := gzip.NewReader(gzLogFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer gz.Close()
+	defer gzLogFile.Close()
+
+	s := bufio.NewScanner(gz)
 
 	mapWatcherData := make(map[string]RawWatcherData)
 	for s.Scan() {
 		if err := json.Unmarshal(s.Bytes(), &watcherData); err != nil {
-			fmt.Println(err)
+			// fmt.Println()
 		}
 		usageType := watcherData.Type
 		if usageType == "usage" {
@@ -111,7 +128,7 @@ func main() {
 			billingID := watcherData.Config.Attributes.BillingID
 			vmUUID := watcherData.UUID
 			// alias := watcherData.Config.Attributes.Alias
-			timestamp := watcherData.Timestamp
+			timestamp := watcherData.Timestamp.Truncate(time.Second)
 			// net0SentBytes := watcherData.NetworkUsage.Net0.SentBytes
 			// net0ReceivedBytes := watcherData.NetworkUsage.Net0.ReceivedBytes
 			// net1SentBytes := watcherData.NetworkUsage.Net1.SentBytes
@@ -120,7 +137,7 @@ func main() {
 			// fmt.Println(ownerUUID, vmUUID, billingID, alias, timestamp)
 			if val, err := billingData[billingID]; err {
 				perMinute := val / 720 / 60
-				fmt.Println(perMinute)
+				// fmt.Println(perMinute)
 				if _, err := mapWatcherData[vmUUID]; err {
 					_tmpRawWatcherData := mapWatcherData[vmUUID]
 					_newPrice := float64(_tmpRawWatcherData.Price) + perMinute
@@ -138,16 +155,19 @@ func main() {
 	}
 
 	for _, v := range mapWatcherData {
+
 		rawWatcherData := RawWatcherData{}
-		res := db.Where("owner_uuid = ? and uuid = ? and billing_id = ? and timestamp = ?", v.OwnerUUID, v.UUID, v.BillingID, v.Timestamp).First(&rawWatcherData)
+		// res := db.Where("owner_uuid = ? and uuid = ? and billing_id = ?", v.OwnerUUID, v.UUID, v.BillingID).Find(&rawWatcherData)
+		res := db.Where("owner_uuid = ? and uuid = ? and billing_id = ? and timestamp = ?", v.OwnerUUID, v.UUID, v.BillingID, v.Timestamp).Find(&rawWatcherData)
+                // fmt.Println(v.OwnerUUID, v.UUID, v.BillingID, v.Timestamp)
 		if res.RecordNotFound() {
 			newRawWatcherData := RawWatcherData{OwnerUUID: v.OwnerUUID, UUID: v.UUID, BillingID: v.BillingID, Price: v.Price, Timestamp: v.Timestamp}
-			fmt.Println("Creating", newRawWatcherData)
+			// fmt.Println("Creating", newRawWatcherData)
 			db.Create(&newRawWatcherData)
 		} else if db.Error != nil {
 			panic("error:" + res.Error.Error())
-		} else {
-			fmt.Println("RawWatcherData exists!")
+		//} else {
+	 	//	fmt.Println("RawWatcherData exists!")
 		}
 	}
 
