@@ -70,7 +70,6 @@ var DBURL = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True", dbUse
 
 var db, err = gorm.Open("mysql", DBURL)
 
-
 func panicOnError(err error) {
 	if err != nil {
 		panic(err)
@@ -134,19 +133,22 @@ func main() {
 			// net1SentBytes := watcherData.NetworkUsage.Net1.SentBytes
 			// net1ReceivedBytes := watcherData.NetworkUsage.Net1.ReceivedBytes
 
-			// fmt.Println(ownerUUID, vmUUID, billingID, alias, timestamp)
+			// set default to 0.0.  This allows for unknow billingID's without prices.
+			perMinute := 0.0
+                        _ = perMinute
+
 			if val, err := billingData[billingID]; err {
 				perMinute := val / 720 / 60
-				// fmt.Println(perMinute)
-				if _, err := mapWatcherData[vmUUID]; err {
-					_tmpRawWatcherData := mapWatcherData[vmUUID]
-					_newPrice := float64(_tmpRawWatcherData.Price) + perMinute
-					mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Price: _newPrice, Timestamp: timestamp}
-				} else {
-					mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Price: perMinute, Timestamp: timestamp}
-				}
+                                _ = perMinute
 			}
 
+			if _, err := mapWatcherData[vmUUID]; err {
+				_tmpRawWatcherData := mapWatcherData[vmUUID]
+				_newPrice := float64(_tmpRawWatcherData.Price) + perMinute
+				mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Price: _newPrice, Timestamp: timestamp}
+			} else {
+				mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Price: perMinute, Timestamp: timestamp}
+			}
 		}
 
 	}
@@ -159,15 +161,15 @@ func main() {
 		rawWatcherData := RawWatcherData{}
 		// res := db.Where("owner_uuid = ? and uuid = ? and billing_id = ?", v.OwnerUUID, v.UUID, v.BillingID).Find(&rawWatcherData)
 		res := db.Where("owner_uuid = ? and uuid = ? and billing_id = ? and timestamp = ?", v.OwnerUUID, v.UUID, v.BillingID, v.Timestamp).Find(&rawWatcherData)
-                // fmt.Println(v.OwnerUUID, v.UUID, v.BillingID, v.Timestamp)
+		// fmt.Println(v.OwnerUUID, v.UUID, v.BillingID, v.Timestamp)
 		if res.RecordNotFound() {
 			newRawWatcherData := RawWatcherData{OwnerUUID: v.OwnerUUID, UUID: v.UUID, BillingID: v.BillingID, Price: v.Price, Timestamp: v.Timestamp}
 			// fmt.Println("Creating", newRawWatcherData)
 			db.Create(&newRawWatcherData)
 		} else if db.Error != nil {
 			panic("error:" + res.Error.Error())
-		//} else {
-	 	//	fmt.Println("RawWatcherData exists!")
+			//} else {
+			//	fmt.Println("RawWatcherData exists!")
 		}
 	}
 
