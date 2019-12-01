@@ -112,7 +112,7 @@ func fetchInvoiceLineItems(c *gin.Context) {
 
 	var total_usage float64
 	var watcherData []RawWatcherData
-	var usageCharge float64
+	// var usageCharge float64
 	var fromTime time.Time
 	var untilTime time.Time
 	var invoiceLineItems []InvoiceLineItem
