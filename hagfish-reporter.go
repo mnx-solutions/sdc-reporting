@@ -130,7 +130,7 @@ func fetchInvoiceLineItems(c *gin.Context) {
 		if _, err := lineItems[item.UUID]; err {
 
 			_tmpLineItem := lineItems[item.UUID]
-			_newUsageCharge := float64(_tmpLineItem.UsageCharge) + usageCharge
+			_newUsageCharge := float64(_tmpLineItem.UsageCharge) + item.Usage
                         fromTime = _tmpLineItem.FromTime
                         untilTime = _tmpLineItem.UntilTime
 
