@@ -1,0 +1,2 @@
+5 * * * * /opt/local/bin/run_hagfish-reader.sh
+

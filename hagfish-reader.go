@@ -25,7 +25,7 @@ type RawWatcherData struct {
 	UUID      string
 	BillingID string
 	Alias     string
-	Price     float64
+	Usage     float64
 	Timestamp time.Time
 	Processed bool
 }
@@ -96,10 +96,9 @@ func main() {
 		billingData[billingPlan.BillingID] = float64(billingPlan.Price)
 	}
 
-	// fmt.Println(billingData)
-
 	filename := os.Args[1]
 	var watcherData WatcherData
+	var perMinute float64
 
 	gzLogFile, err := os.Open(filename)
 	if err != nil {
@@ -126,28 +125,26 @@ func main() {
 			ownerUUID := watcherData.Config.Attributes.OwnerUUID
 			billingID := watcherData.Config.Attributes.BillingID
 			vmUUID := watcherData.UUID
-			// alias := watcherData.Config.Attributes.Alias
+			alias := watcherData.Config.Attributes.Alias
 			timestamp := watcherData.Timestamp.Truncate(time.Second)
 			// net0SentBytes := watcherData.NetworkUsage.Net0.SentBytes
 			// net0ReceivedBytes := watcherData.NetworkUsage.Net0.ReceivedBytes
 			// net1SentBytes := watcherData.NetworkUsage.Net1.SentBytes
 			// net1ReceivedBytes := watcherData.NetworkUsage.Net1.ReceivedBytes
 
-			// set default to 0.0.  This allows for unknow billingID's without prices.
-			perMinute := 0.0
-                        _ = perMinute
-
 			if val, err := billingData[billingID]; err {
-				perMinute := val / 720 / 60
-                                _ = perMinute
+				perMinute = val / 720 / 60 / 100
+			} else {
+				// set 0.0.  This allows for unknown billingID's
+				perMinute = 0.0
 			}
 
 			if _, err := mapWatcherData[vmUUID]; err {
 				_tmpRawWatcherData := mapWatcherData[vmUUID]
-				_newPrice := float64(_tmpRawWatcherData.Price) + perMinute
-				mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Price: _newPrice, Timestamp: timestamp}
+				_newUsage := float64(_tmpRawWatcherData.Usage) + perMinute
+				mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Usage: _newUsage, Timestamp: timestamp, Alias: alias}
 			} else {
-				mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Price: perMinute, Timestamp: timestamp}
+				mapWatcherData[vmUUID] = RawWatcherData{OwnerUUID: ownerUUID, UUID: vmUUID, BillingID: billingID, Usage: perMinute, Timestamp: timestamp, Alias: alias}
 			}
 		}
 
@@ -159,17 +156,12 @@ func main() {
 	for _, v := range mapWatcherData {
 
 		rawWatcherData := RawWatcherData{}
-		// res := db.Where("owner_uuid = ? and uuid = ? and billing_id = ?", v.OwnerUUID, v.UUID, v.BillingID).Find(&rawWatcherData)
 		res := db.Where("owner_uuid = ? and uuid = ? and billing_id = ? and timestamp = ?", v.OwnerUUID, v.UUID, v.BillingID, v.Timestamp).Find(&rawWatcherData)
-		// fmt.Println(v.OwnerUUID, v.UUID, v.BillingID, v.Timestamp)
 		if res.RecordNotFound() {
-			newRawWatcherData := RawWatcherData{OwnerUUID: v.OwnerUUID, UUID: v.UUID, BillingID: v.BillingID, Price: v.Price, Timestamp: v.Timestamp}
-			// fmt.Println("Creating", newRawWatcherData)
+			newRawWatcherData := RawWatcherData{OwnerUUID: v.OwnerUUID, UUID: v.UUID, BillingID: v.BillingID, Usage: v.Usage, Timestamp: v.Timestamp, Alias: v.Alias}
 			db.Create(&newRawWatcherData)
 		} else if db.Error != nil {
 			panic("error:" + res.Error.Error())
-			//} else {
-			//	fmt.Println("RawWatcherData exists!")
 		}
 	}
 

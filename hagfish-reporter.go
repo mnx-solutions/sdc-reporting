@@ -17,9 +17,18 @@ type RawWatcherData struct {
 	UUID      string
 	BillingID string
 	Alias     string
-	Price     float64
+	Usage     float64
 	Timestamp time.Time
 	Processed bool
+}
+
+type InvoiceLineItem struct {
+	UUID         string
+	Alias        string
+	UsageCharge  float64
+	FromTime     time.Time
+	UntilTime    time.Time
+	UsageMinutes float64
 }
 
 var dbName = os.Getenv("DB_NAME")
@@ -46,8 +55,10 @@ func main() {
 
 	v1 := router.Group("/api/v1/")
 	{
-		v1.GET("/balance/owner/:id", fetchBalanceOwner)
-		v1.GET("/balance/owner/:id/vm/:vmid", fetchBalanceVm)
+		v1.GET("/usage/owner/:ownerid", fetchUsageOwner)
+		v1.GET("/usage/owner/:ownerid/machine/:machineid", fetchUsageMachine)
+		v1.GET("/invoice/owner/:ownerid", fetchInvoiceLineItems)
+		v1.POST("/usage/owner/:ownerid/process", processUsageOwner)
 	}
 	router.Run()
 	defer db.Close()
@@ -55,13 +66,34 @@ func main() {
 }
 
 // fetchAllTodo fetch all todos
-func fetchBalanceOwner(c *gin.Context) {
-	ownerUUID := c.Param("id")
+func fetchUsageOwner(c *gin.Context) {
+	ownerUUID := c.Param("ownerid")
 
-	var totalCost float64
+	var total_usage float64
 	var watcherData []RawWatcherData
 
 	db.Where("owner_uuid = ? and processed = 0", ownerUUID).Find(&watcherData)
+
+	if len(watcherData) <= 0 {
+		c.JSON(http.StatusNotFound, gin.H{"status": http.StatusNotFound, "message": "No data found!!"})
+		return
+	}
+
+	//transforms the todos for building a good response
+	for _, item := range watcherData {
+		total_usage = item.Usage + total_usage
+	}
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "usage": total_usage})
+}
+
+func fetchUsageMachine(c *gin.Context) {
+	ownerUUID := c.Param("owernid")
+	vmUUID := c.Param("machineid")
+
+	var total_usage float64
+	var watcherData []RawWatcherData
+
+	db.Where("owner_uuid = ? and uuid = ? and processed = 0", ownerUUID, vmUUID).Find(&watcherData)
 
 	if len(watcherData) <= 0 {
 		c.JSON(http.StatusNotFound, gin.H{"status": http.StatusNotFound, "message": "No data found!"})
@@ -70,29 +102,66 @@ func fetchBalanceOwner(c *gin.Context) {
 
 	//transforms the todos for building a good response
 	for _, item := range watcherData {
-		totalCost = item.Price + totalCost
+		total_usage = item.Usage + total_usage
 	}
-	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "total_cost": totalCost})
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "usage": total_usage})
 }
 
-func fetchBalanceVm(c *gin.Context) {
-	ownerUUID := c.Param("id")
-        vmUUID := c.Param("vmid")
+func fetchInvoiceLineItems(c *gin.Context) {
+	ownerUUID := c.Param("ownerid")
 
-        var totalCost float64
-        var watcherData []RawWatcherData
+	var total_usage float64
+	var watcherData []RawWatcherData
+	var usageCharge float64
+	var fromTime time.Time
+	var untilTime time.Time
+	var invoiceLineItems []InvoiceLineItem
 
-        db.Where("owner_uuid = ? and uuid = ? and processed = 0", ownerUUID, vmUUID).Find(&watcherData)
+	lineItems := make(map[string]InvoiceLineItem)
 
-        if len(watcherData) <= 0 {
-                c.JSON(http.StatusNotFound, gin.H{"status": http.StatusNotFound, "message": "No data found!"})
-                return
-        }
+	db.Where("owner_uuid = ? and processed = 0", ownerUUID).Find(&watcherData)
 
-        //transforms the todos for building a good response
-        for _, item := range watcherData {
-                totalCost = item.Price + totalCost
-        }
-        c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "total_cost": totalCost})
+	if len(watcherData) <= 0 {
+		c.JSON(http.StatusNotFound, gin.H{"status": http.StatusNotFound, "message": "No data found!!!"})
+		return
+	}
+
+	for _, item := range watcherData {
+		if _, err := lineItems[item.UUID]; err {
+
+			_tmpLineItem := lineItems[item.UUID]
+			_newUsageCharge := float64(_tmpLineItem.UsageCharge) + usageCharge
+                        fromTime = _tmpLineItem.FromTime
+                        untilTime = _tmpLineItem.UntilTime
+
+			if item.Timestamp.Before(_tmpLineItem.FromTime) {
+				fromTime = item.Timestamp
+ 
+			}
+                        
+
+			if item.Timestamp.After(_tmpLineItem.UntilTime) {
+				untilTime = item.Timestamp
+			}
+
+			lineItems[item.UUID] = InvoiceLineItem{UUID: item.UUID, Alias: item.Alias, UsageCharge: _newUsageCharge, FromTime: fromTime, UntilTime: untilTime}
+
+		} else {
+			lineItems[item.UUID] = InvoiceLineItem{UUID: item.UUID, Alias: item.Alias, UsageCharge: item.Usage, FromTime: item.Timestamp, UntilTime: item.Timestamp}
+		}
+		total_usage = item.Usage + total_usage
+	}
+
+	for _, item := range lineItems {
+		invoiceLineItems = append(invoiceLineItems, item)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "line_tems": invoiceLineItems})
 }
 
+func processUsageOwner(c *gin.Context) {
+	ownerUUID := c.Param("owernid")
+	var watcherData RawWatcherData
+	db.Model(&watcherData).Where("owner_uuid = ? and processed = 0", ownerUUID).Update("processed", 1)
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "processed": true})
+}

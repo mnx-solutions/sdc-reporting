@@ -7,7 +7,7 @@ import (
 	"github.com/chargebee/chargebee-go/models/plan"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
-        "os"
+	"os"
 )
 
 func panicOnError(err error) {
@@ -38,12 +38,11 @@ var DBURL = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True", dbUse
 
 var db, err = gorm.Open("mysql", DBURL)
 
-
 func main() {
 
 	fmt.Println("Configuring chargebee.. ")
 	// chargebee.Configure("key", "site")
-        chargebee.Configure(chargebeeKey, chargebeeSite)
+	chargebee.Configure(chargebeeKey, chargebeeSite)
 
 	// db.LogMode(true)
 
@@ -51,7 +50,6 @@ func main() {
 
 	fmt.Println("Performing AutoMigrate().. ")
 	db.AutoMigrate(&BillingPlan{})
-
 
 	fmt.Println("running planAction.List().. ")
 	res, err := planAction.List(&plan.ListRequestParams{Limit: chargebee.Int32(100)}).ListRequest()
@@ -61,16 +59,16 @@ func main() {
 		for i := range res.List {
 			Plan := res.List[i].Plan
 			billingPlan := BillingPlan{}
-                        res := db.Where("billing_id = ?", Plan.Id).First(&billingPlan)
-                        if res.RecordNotFound() {
-                            newBillingPlan := BillingPlan{BillingID: Plan.Id, Price: Plan.Price, Name: Plan.Name}
-                            fmt.Println("Creating", newBillingPlan)
-                            db.Create(&newBillingPlan)
-                        } else if db.Error != nil {
+			res := db.Where("billing_id = ?", Plan.Id).First(&billingPlan)
+			if res.RecordNotFound() {
+				newBillingPlan := BillingPlan{BillingID: Plan.Id, Price: Plan.Price, Name: Plan.Name}
+				fmt.Println("Creating", newBillingPlan)
+				db.Create(&newBillingPlan)
+			} else if db.Error != nil {
 				panic("error:" + res.Error.Error())
 			} else {
-                            fmt.Println("Billing Plan Exists: ", billingPlan)
-                        } 
+				fmt.Println("Billing Plan Exists: ", billingPlan)
+			}
 		}
 	}
 
