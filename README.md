@@ -22,3 +22,35 @@ Currently we import owner_uuid, billing_id, vm_uuid.  From this data we read a b
 
 # hagfish-reporter
 hagfish-reporter is used to calculate costs, and network bandwidth usage.
+
+# Installation
+
+## hagfish-reader
+
+hagfish-reader needs to be installed on all compute nodes (CNs). This is accomplished by a cron entry:
+
+```
+# crontab -l
+10 * * * * /opt/local/bin/run_hagfish-reader.sh 2>&1 >> /var/log/hagfish-reader.log
+```
+
+Ensure `/opt/local/bin/run_hagfish-reader.sh`, `/opt/local/bin/hagfish-reader`, and `/opt/local/etc/.env` are installed and configure.
+
+Review the headnode for configuration details on `.env`:
+
+Though it should include:
+
+```
+export DB_NAME="reporting"
+export DB_PASS=""
+export DB_USER="reporting"
+export DB_HOST=""
+export DB_PORT="3306"
+```
+
+Optionally, on a node that also updates billing packages you will need entries for chargebee
+```
+export CHARGEBEE_KEY=""
+export CHARGEBEE_SITE=""
+```
+
