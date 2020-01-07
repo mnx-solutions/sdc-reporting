@@ -156,7 +156,7 @@ func fetchInvoiceLineItems(c *gin.Context) {
 		invoiceLineItems = append(invoiceLineItems, item)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "line_tems": invoiceLineItems})
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "line_items": invoiceLineItems})
 }
 
 func processUsageOwner(c *gin.Context) {
