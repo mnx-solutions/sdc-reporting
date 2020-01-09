@@ -41,7 +41,10 @@ var DBURL = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True", dbUse
 
 var db, err = gorm.Open("mysql", DBURL)
 
+
 func main() {
+	db.LogMode(true)
+
 
 	if err != nil {
 		fmt.Println(err)
@@ -87,7 +90,7 @@ func fetchUsageOwner(c *gin.Context) {
 }
 
 func fetchUsageMachine(c *gin.Context) {
-	ownerUUID := c.Param("owernid")
+	ownerUUID := c.Param("ownerid")
 	vmUUID := c.Param("machineid")
 
 	var total_usage float64
@@ -160,8 +163,8 @@ func fetchInvoiceLineItems(c *gin.Context) {
 }
 
 func processUsageOwner(c *gin.Context) {
-	ownerUUID := c.Param("owernid")
-	var watcherData RawWatcherData
-	db.Model(&watcherData).Where("owner_uuid = ? and processed = 0", ownerUUID).Update("processed", 1)
+	ownerUUID := c.Param("ownerid")
+	// var watcherData RawWatcherData
+	db.Model(RawWatcherData{}).Where("owner_uuid = ? and processed = 0", ownerUUID).Updates(RawWatcherData{Processed: true})
 	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "processed": true})
 }
